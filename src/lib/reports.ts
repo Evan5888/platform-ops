@@ -12,6 +12,11 @@ export type SeriesPoint = {
   date: string
   platformId: string
   currency: Currency
+  活跃人数: number | null
+  注册人数: number | null
+  充值人数: number | null
+  充值金额: number | null
+  投注金额: number | null
   新充人数: number | null
   新充金额: number | null
   首充人数: number | null
@@ -180,6 +185,11 @@ export function parseReports(files: ReportFile[]): ReportBundle {
         date,
         platformId: file.platformId,
         currency: file.currency,
+        活跃人数: parseCell(row['活跃人数'] ?? ''),
+        注册人数: parseCell(row['注册人数'] ?? ''),
+        充值人数: parseCell(row['充值人数'] ?? ''),
+        充值金额: parseCell(row['充值金额'] ?? ''),
+        投注金额: parseCell(row['投注金额'] ?? ''),
         新充人数: freshCount,
         新充金额: freshMoney,
         首充人数: firstCount,
