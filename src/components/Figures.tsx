@@ -1,5 +1,13 @@
 import { formatMetric, metricKind } from '../lib/metrics'
 
+export function RateGap() {
+  return (
+    <span className="blank" title="已导入另一种货币，这个平台还没有汇率">
+      缺汇率
+    </span>
+  )
+}
+
 export function MetricValue({ metricKey, value, currency }: { metricKey: string; value: number; currency: string }) {
   const negative = value < 0
   if (metricKind(metricKey) === 'money') {
@@ -21,11 +29,14 @@ export function Figures({
   metrics,
   keys,
   currency,
+  needsRate = [],
 }: {
   metrics: Record<string, number>
   keys: string[]
   currency: string
+  needsRate?: string[]
 }) {
+  const blocked = new Set(needsRate)
   return (
     <dl className="figures">
       {keys.map((key) => {
@@ -35,7 +46,9 @@ export function Figures({
           <div key={key}>
             <dt>{key}</dt>
             <dd>
-              {missing ? (
+              {blocked.has(key) ? (
+                <RateGap />
+              ) : missing ? (
                 <span className="blank" title="文件里这一格是空的">
                   空
                 </span>
@@ -54,17 +67,26 @@ export function InlineFigures({
   metrics,
   keys,
   currency,
+  needsRate = [],
 }: {
   metrics: Record<string, number>
   keys: string[]
   currency: string
+  needsRate?: string[]
 }) {
+  const blocked = new Set(needsRate)
   return (
     <p className="inline-figures">
       {keys.map((key) => (
         <span key={key}>
           <span className="k">{key}</span>
-          <MetricValue metricKey={key} value={metrics[key]} currency={currency} />
+          {blocked.has(key) ? (
+            <RateGap />
+          ) : typeof metrics[key] !== 'number' ? (
+            <span className="blank">空</span>
+          ) : (
+            <MetricValue metricKey={key} value={metrics[key]} currency={currency} />
+          )}
         </span>
       ))}
     </p>

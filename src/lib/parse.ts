@@ -1,7 +1,8 @@
 import * as XLSX from 'xlsx'
 import { platforms as defaultPlatforms, type Platform } from '../data/platforms'
+import { matchCurrency } from './currency'
 import { isIsoDate } from './dates'
-import { type ParsedBundle, type ParsedGame, type ParsedUser, type UserSegment } from './types'
+import { type Currency, type ParsedBundle, type ParsedGame, type ParsedRateRow, type ParsedUser, type UserSegment } from './types'
 
 export type ParseArgs = {
   filename: string
@@ -11,6 +12,7 @@ export type ParseArgs = {
   fallbackDate: string
   preferFileValues: boolean
   latestReadyDate: string
+  currency: Currency | null
 }
 
 type SheetMatrix = {
@@ -19,9 +21,7 @@ type SheetMatrix = {
   headers: string[]
 }
 
-const ignoredHeaders = new Set(
-  ['备注', '说明', '币种', '货币', 'note', 'notes', 'remark', 'remarks', 'currency'].map(normToken),
-)
+const ignoredHeaders = new Set(['备注', '说明', 'note', 'notes', 'remark', 'remarks'].map(normToken))
 
 export function normToken(value: string): string {
   return value
@@ -45,6 +45,9 @@ function alias(name: string, field: string) {
   ['数据日期', 'date'],
   ['统计日期', 'date'],
   ['date', 'date'],
+  ['币种', 'currency'],
+  ['货币', 'currency'],
+  ['currency', 'currency'],
   ['平台', 'platform'],
   ['站点', 'platform'],
   ['品牌', 'platform'],
@@ -177,7 +180,7 @@ export function parseNumber(value: unknown): number | null {
   const cleaned = text
     .replace(/[()]/g, '')
     .replace(/[$￥,\s\u00a0]/g, '')
-    .replace(/MXN|mxn|RMB|CNY/g, '')
+    .replace(/MXN|mxn|USD|usd|RMB|CNY/g, '')
   if (!/^[+-]?\d+(\.\d+)?$/.test(cleaned)) return null
   const parsed = Number(cleaned)
   if (!Number.isFinite(parsed)) return null
@@ -353,6 +356,7 @@ export function parseExportFile(args: ParseArgs): ParsedBundle {
       let dateValue: unknown
       let platformValue: unknown
       let segmentValue: unknown
+      let currencyText = ''
       let provider = ''
       let game = ''
       let looseUser: unknown
@@ -375,6 +379,7 @@ export function parseExportFile(args: ParseArgs): ParsedBundle {
         if (field === 'section') sectionText = cellText(value)
         else if (field === 'date') dateValue = value
         else if (field === 'platform') platformValue = value
+        else if (field === 'currency') currencyText = cellText(value)
         else if (field === 'segment') segmentValue = value
         else if (field === 'segment_or_count') looseUser = value
         else if (field === 'provider') provider = cellText(value)
@@ -451,6 +456,20 @@ export function parseExportFile(args: ParseArgs): ParsedBundle {
         fail(`${where} 缺少平台`)
         continue
       }
+
+      let currency = args.currency
+      if (args.preferFileValues && currencyText) {
+        const matched = matchCurrency(currencyText)
+        if (!matched) {
+          fail(`${where} 的币种无法识别：${currencyText}`)
+          continue
+        }
+        currency = matched
+      }
+      if (!currency) {
+        fail(`${where} 缺少币种`)
+        continue
+      }
       if (rowFailed) continue
 
       if (section === 'user') {
@@ -460,7 +479,7 @@ export function parseExportFile(args: ParseArgs): ParsedBundle {
           continue
         }
         if (hasGame) note('用户行里的厂商或游戏不会进入游戏表。游戏请另起一行，并把分区写成「游戏」。')
-        users.push({ date, platformId, segment, metrics })
+        users.push({ date, platformId, segment, currency, metrics })
         continue
       }
 
@@ -469,7 +488,7 @@ export function parseExportFile(args: ParseArgs): ParsedBundle {
         continue
       }
       if (hasSegment) note('游戏行里的用户类型不会进入用户表。')
-      games.push({ date, platformId, provider, game, metrics })
+      games.push({ date, platformId, provider, game, currency, metrics })
     }
   }
 
@@ -478,4 +497,137 @@ export function parseExportFile(args: ParseArgs): ParsedBundle {
   }
 
   return { users, games, errors, notices }
+}
+
+const rateColumns = new Map<string, 'platform' | 'date' | 'rate'>()
+
+function rateAlias(name: string, field: 'platform' | 'date' | 'rate') {
+  rateColumns.set(normToken(name), field)
+}
+
+;[
+  ['平台', 'platform'],
+  ['站点', 'platform'],
+  ['品牌', 'platform'],
+  ['platform', 'platform'],
+  ['日期', 'date'],
+  ['生效日期', 'date'],
+  ['date', 'date'],
+  ['汇率', 'rate'],
+  ['美元兑比索', 'rate'],
+  ['美金兑比索', 'rate'],
+  ['比索每美元', 'rate'],
+  ['mxnperusd', 'rate'],
+  ['usd/mxn', 'rate'],
+  ['usdmxn', 'rate'],
+].forEach(([name, field]) => rateAlias(name, field as 'platform' | 'date' | 'rate'))
+
+const dailyMarkers = new Set([
+  'section',
+  'segment',
+  'segment_or_count',
+  'provider',
+  'game',
+  '人数',
+  '充值人数',
+  '充值笔数',
+  '充值金额',
+  '提现人数',
+  '提现笔数',
+  '提现金额',
+  '投注人数',
+  '投注金额',
+  '有效投注',
+  '派彩金额',
+  '输赢',
+  '注单数',
+  '优惠金额',
+])
+
+export type RateFileResult =
+  | { kind: 'not-rate' }
+  | { kind: 'rate'; rates: ParsedRateRow[]; errors: string[]; notices: string[] }
+
+function isRateSheet(headers: string[]): boolean {
+  let hasPlatform = false
+  let hasRate = false
+  let daily = false
+  for (const header of headers) {
+    if (!header) continue
+    const token = normToken(header)
+    const rateField = rateColumns.get(token)
+    if (rateField === 'platform') hasPlatform = true
+    else if (rateField === 'rate') hasRate = true
+    const dailyField = headerFields.get(token)
+    if (dailyField && dailyMarkers.has(dailyField)) daily = true
+  }
+  return hasPlatform && hasRate && !daily
+}
+
+/** 汇率文件：每个平台一行，数字是 1 美金可兑换的墨西哥比索。空单元格不产生汇率。 */
+export function parseRateFile(args: { filename: string; buffer: ArrayBuffer; platforms?: Platform[] }): RateFileResult {
+  const list = args.platforms ?? defaultPlatforms
+  const csv = /\.csv$/i.test(args.filename)
+  const sheets = csv ? readCsvSheets(args.buffer, args.filename) : readExcelSheets(args.buffer)
+  if (sheets.length === 0) return { kind: 'not-rate' }
+  const rateSheets = sheets.filter((sheet) => isRateSheet(sheet.headers))
+  if (rateSheets.length === 0 || rateSheets.length !== sheets.length) return { kind: 'not-rate' }
+
+  const errors: string[] = []
+  const notices: string[] = []
+  const seenNotices = new Set<string>()
+  const note = (message: string) => {
+    if (seenNotices.has(message)) return
+    seenNotices.add(message)
+    notices.push(message)
+  }
+  const found = new Map<string, ParsedRateRow>()
+
+  for (const sheet of rateSheets) {
+    for (const line of sheet.rows) {
+      const where = rateSheets.length > 1 ? `${sheet.name} 第 ${line.rowNumber} 行` : `第 ${line.rowNumber} 行`
+      let platformText = ''
+      let rateValue: unknown
+      let dateValue: unknown
+      let sawRate = false
+      sheet.headers.forEach((header, index) => {
+        const field = rateColumns.get(normToken(header))
+        const value = line.cells[index]
+        if (field === 'platform') platformText = cellText(value)
+        else if (field === 'date') dateValue = value
+        else if (field === 'rate') {
+          sawRate = true
+          rateValue = value
+        }
+      })
+      if (!platformText && cellText(rateValue) === '') continue
+      const platform = matchPlatform(platformText, list)
+      if (!platform) {
+        errors.push(platformText ? `${where} 的平台无法识别：${platformText}` : `${where} 缺少平台`)
+        continue
+      }
+      if (!sawRate || cellText(rateValue) === '') {
+        note(`${platform.name} 的汇率是空的，不写入。`)
+        continue
+      }
+      const numeric = parseNumber(rateValue)
+      if (numeric == null || numeric <= 0) {
+        errors.push(`${where} ${platform.name} 的汇率不是大于 0 的数字。`)
+        continue
+      }
+      let asOf: string | null = null
+      if (cellText(dateValue) !== '') {
+        const parsed = parseDate(dateValue)
+        if (!parsed) {
+          errors.push(`${where} 的日期无法识别`)
+          continue
+        }
+        asOf = parsed
+      }
+      if (found.has(platform.id)) note(`${platform.name} 有多行汇率，采用最后一行。`)
+      found.set(platform.id, { platformId: platform.id, mxnPerUsd: numeric, asOf })
+    }
+  }
+
+  return { kind: 'rate', rates: [...found.values()], errors, notices }
 }

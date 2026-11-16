@@ -6,7 +6,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1 --port 5173 --strictPort",
-    "check": "node --experimental-strip-types scripts/self-check.ts"
+    "check": "node --experimental-strip-types --import ./scripts/register-ts.mjs scripts/self-check.ts"
   },
   "dependencies": {
     "@fontsource/noto-sans-sc": "^5.2.6",

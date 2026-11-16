@@ -17,7 +17,7 @@ export const platforms: Platform[] = [
     name: 'Afun-MX',
     market: 'MX',
     currency: 'MXN',
-    accent: '#1c1916',
+    accent: '#1493c7',
     aliases: ['afun', 'afunmx', 'afun mx', 'afun-mx'],
   },
   {
@@ -25,7 +25,7 @@ export const platforms: Platform[] = [
     name: 'Betroia',
     market: 'MX',
     currency: 'MXN',
-    accent: '#8a6840',
+    accent: '#0e6284',
     aliases: ['betroia mx', 'betroia-mx'],
   },
 ]
@@ -53,7 +53,7 @@ export function describePlatform(id: string): Platform {
       name: id,
       market: 'MX',
       currency: 'MXN',
-      accent: '#9aa79f',
+      accent: '#7ea8b8',
       aliases: [],
     }
   )

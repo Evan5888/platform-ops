@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict'
 import { platforms } from '../src/data/platforms.ts'
+import { convertMoney } from '../src/lib/currency.ts'
 import { latestReadyDataDate } from '../src/lib/dates.ts'
-import { parseExportFile } from '../src/lib/parse.ts'
+import { userMovement } from '../src/lib/movement.ts'
+import { parseExportFile, parseRateFile } from '../src/lib/parse.ts'
+import type { StoreData } from '../src/lib/types.ts'
+import { slicesFor } from '../src/lib/view.ts'
 
 assert.equal(latestReadyDataDate(new Date('2026-11-16T11:17:00Z')), '2026-11-15')
 assert.equal(latestReadyDataDate(new Date('2026-11-16T08:30:00Z')), '2026-11-14')
@@ -25,6 +29,7 @@ const parsed = parseExportFile({
   fallbackDate: '2026-11-15',
   preferFileValues: true,
   latestReadyDate: '2026-11-15',
+  currency: 'MXN',
 })
 
 assert.deepEqual(parsed.errors, [])
@@ -43,8 +48,98 @@ const future = parseExportFile({
   fallbackDate: '2026-11-15',
   preferFileValues: true,
   latestReadyDate: '2026-11-15',
+  currency: 'MXN',
 })
 assert.equal(future.users.length, 0)
 assert.ok(future.errors.length > 0)
+
+assert.equal(convertMoney(1800, 'MXN', 'USD', null), null)
+assert.equal(convertMoney(1800, 'MXN', 'USD', 18), 100)
+assert.equal(convertMoney(100, 'USD', 'MXN', 18), 1800)
+
+const blankRates = parseRateFile({
+  filename: 'rates.csv',
+  buffer: new TextEncoder().encode('平台,汇率\nAfun-MX,\nBetroia,\n').buffer,
+  platforms,
+})
+assert.equal(blankRates.kind, 'rate')
+if (blankRates.kind === 'rate') assert.equal(blankRates.rates.length, 0)
+
+const oneRate = parseRateFile({
+  filename: 'rates.csv',
+  buffer: new TextEncoder().encode('平台,汇率\nAfun-MX,18.5\nBetroia,\n').buffer,
+  platforms,
+})
+assert.equal(oneRate.kind, 'rate')
+if (oneRate.kind === 'rate') {
+  assert.equal(oneRate.rates.length, 1)
+  assert.equal(oneRate.rates[0]?.platformId, 'afun-mx')
+  assert.equal(oneRate.rates[0]?.mxnPerUsd, 18.5)
+}
+
+const notRate = parseRateFile({
+  filename: 'sample.csv',
+  buffer,
+  platforms,
+})
+assert.equal(notRate.kind, 'not-rate')
+
+function row(date: string, segment: '新充用户' | '首充用户' | '老用户', count: number, money: number, currency: 'MXN' | 'USD' = 'MXN') {
+  return {
+    date,
+    platformId: 'afun-mx',
+    segment,
+    currency,
+    metrics: { 人数: count, 充值金额: money },
+    sourceName: 'sample.csv',
+    importedAt: '2026-11-16T12:00:00.000Z',
+  }
+}
+
+const store: StoreData = {
+  version: 2,
+  rates: {},
+  games: [],
+  users: [row('2026-11-15', '新充用户', 4, 1800), row('2026-11-15', '首充用户', 4, 1800), row('2026-11-15', '老用户', 11, 9600)],
+}
+
+const emptyMove = userMovement({ version: 2, users: [], games: [], rates: {} }, '2026-11-15', 'all', 'MXN')
+assert.equal(emptyMove.length, 1)
+assert.equal(emptyMove[0]?.status, 'no-file')
+assert.match(emptyMove[0]?.text ?? '', /不说明/)
+
+const oneDay = userMovement(store, '2026-11-15', 'afun-mx', 'MXN')
+assert.equal(oneDay[0]?.status, 'no-history')
+assert.match(oneDay[0]?.text ?? '', /不推测原因/)
+assert.equal(oneDay[0]?.parts, null)
+
+store.users.push(row('2026-11-14', '新充用户', 0, 0), row('2026-11-14', '老用户', 2, 100))
+const partial = userMovement(store, '2026-11-15', 'afun-mx', 'MXN')
+assert.equal(partial[0]?.status, 'explained')
+assert.match(partial[0]?.text ?? '', /首充缺少相邻一天的人数，没有计入，也不当成 0/)
+assert.equal(partial[0]?.parts?.some((part) => part.segment === '首充用户'), false)
+assert.equal(partial[0]?.parts?.find((part) => part.segment === '老用户')?.delta, 9)
+
+store.users.push(row('2026-11-14', '首充用户', 5, 100))
+const full = userMovement(store, '2026-11-15', 'afun-mx', 'MXN')
+assert.equal(full[0]?.text, '较 2026-11-14，人数合计增加 12。新充增加 4，首充减少 1，老用户增加 9。变动主要来自老用户。')
+
+const usdView = slicesFor(store, '2026-11-15', 'USD')
+const afun = usdView.find((slice) => slice.platform.id === 'afun-mx')
+assert.equal(afun?.segments[0]?.metrics?.['人数'], 4)
+assert.equal(afun?.segments[0]?.metrics?.['充值金额'], undefined)
+assert.ok(afun?.segments[0]?.needsRateKeys.includes('充值金额'))
+
+store.rates['afun-mx'] = { mxnPerUsd: 18, sourceName: 'rates.csv', importedAt: '2026-11-16T12:00:00.000Z', asOf: null }
+const converted = slicesFor(store, '2026-11-15', 'USD').find((slice) => slice.platform.id === 'afun-mx')
+assert.equal(converted?.segments[0]?.metrics?.['充值金额'], 100)
+assert.equal(converted?.userConverted, true)
+
+store.users.push(row('2026-11-15', '新充用户', 4, 90, 'USD'))
+const nativeUsd = slicesFor(store, '2026-11-15', 'USD').find((slice) => slice.platform.id === 'afun-mx')
+assert.equal(nativeUsd?.segments[0]?.metrics?.['充值金额'], 90)
+assert.equal(nativeUsd?.segments[2]?.metrics?.['充值金额'], 9600 / 18)
+assert.equal(nativeUsd?.userConverted, true)
+assert.equal(slicesFor(store, '2026-11-15', 'MXN').find((slice) => slice.platform.id === 'afun-mx')?.segments[2]?.metrics?.['充值金额'], 9600)
 
 console.log('self-check ok')
