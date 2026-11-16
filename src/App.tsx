@@ -2,12 +2,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Figures, InlineFigures, MetricValue, RateGap } from './components/Figures'
 import { ImportDialog } from './components/ImportDialog'
 import { Movement } from './components/Movement'
+import { oldUserNote, ReportSeries } from './components/SeriesChart'
+import { reportBundle } from './data/bundled'
 import { marketSummary, platforms } from './data/platforms'
 import { currencyLabel, formatRate } from './lib/currency'
 import { formatStamp, latestReadyDataDate, weekdayLabel } from './lib/dates'
 import { fetchInbox } from './lib/inbox'
 import { summaryMetricKeys } from './lib/metrics'
 import { userMovement } from './lib/movement'
+import { openingDate, withBundled } from './lib/reports'
 import { applyImport, applyRates, clearScope, loadStore, saveStore, scopeHasData } from './lib/storage'
 import type { Currency, InboxSnapshot, ParsedBundle, ParsedRateRow, StoreData } from './lib/types'
 import { slicesFor, visibleSlices, type PlatformSlice } from './lib/view'
@@ -30,7 +33,7 @@ export function App() {
   const [store, setStore] = useState<StoreData>(() => loadStore())
   const [platformId, setPlatformId] = useState('all')
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('MXN')
-  const [date, setDate] = useState(latestReady)
+  const [date, setDate] = useState(() => openingDate(latestReady, reportBundle.end))
   const [dateNote, setDateNote] = useState<string | null>(null)
   const [importOpen, setImportOpen] = useState(false)
   const [status, setStatus] = useState<string | null>(null)
@@ -69,9 +72,10 @@ export function App() {
     return () => observer.disconnect()
   }, [])
 
-  const slices = useMemo(() => slicesFor(store, date, displayCurrency), [store, date, displayCurrency])
+  const viewStore = useMemo(() => withBundled(store, reportBundle), [store])
+  const slices = useMemo(() => slicesFor(viewStore, date, displayCurrency), [viewStore, date, displayCurrency])
   const shown = useMemo(() => visibleSlices(slices, platformId), [slices, platformId])
-  const movement = useMemo(() => userMovement(store, date, platformId, displayCurrency), [store, date, platformId, displayCurrency])
+  const movement = useMemo(() => userMovement(viewStore, date, platformId, displayCurrency), [viewStore, date, platformId, displayCurrency])
   const hasScope = scopeHasData(store, date, platformId)
   const market = marketSummary(platforms)
 
@@ -144,7 +148,7 @@ export function App() {
   }
 
   const scopeName = platformId === 'all' ? '全部平台' : platformLabel(platformId)
-  const anyRate = platforms.some((item) => store.rates[item.id])
+  const anyRate = platforms.some((item) => viewStore.rates[item.id])
 
   return (
     <div className="shell" data-latest={latestReady} data-currency={displayCurrency}>
@@ -233,23 +237,28 @@ export function App() {
           <div className="rates" data-testid="rate-board" aria-label="汇率">
             <span>汇率 · 1 美金兑比索</span>
             {platforms.map((item) => {
-              const rate = store.rates[item.id]
+              const rate = viewStore.rates[item.id]
+              const verdict = reportBundle.verdicts[item.id]
+              const unstable = verdict && !verdict.stable
               return (
                 <p key={item.id} className="rate-line">
                   <em>{item.name}</em>
                   {rate ? (
-                    <strong data-testid={`rate-${item.id}`} title={`${rate.sourceName}${rate.asOf ? ` · ${rate.asOf}` : ''}`}>
+                    <strong
+                      data-testid={`rate-${item.id}`}
+                      title={verdict ? `${verdict.pairs} 对，最小 ${verdict.min}，最大 ${verdict.max}` : rate.sourceName}
+                    >
                       {formatRate(rate.mxnPerUsd)}
                     </strong>
                   ) : (
                     <strong className="rate-empty" data-testid={`rate-${item.id}`}>
-                      未到
+                      {unstable ? '不稳定' : '未到'}
                     </strong>
                   )}
                 </p>
               )
             })}
-            {!anyRate && <small>汇率文件未到，金额不换算。</small>}
+            <small>{anyRate ? '金额列中位数。人数不换算。' : '汇率文件未到，金额不换算。'}</small>
           </div>
 
           <button type="button" className="solid" data-testid="open-import" onClick={() => setImportOpen(true)}>
@@ -292,9 +301,10 @@ export function App() {
               <h2>
                 <span>01</span>用户
               </h2>
-              <p>新充用户、首充用户、老用户。只列出导入文件里出现的指标。</p>
-            </div>
-            <Movement lines={movement} />
+            <p>新充人数、新充金额、首充人数、首充金额来自平台日报。老用户对不上就不填。</p>
+          </div>
+          <ReportSeries platformId={platformId} currency={displayCurrency} />
+          <Movement lines={movement} />
             {shown.some((slice) => slice.hasUsers) ? (
               shown.map((slice) =>
                 slice.hasUsers ? (
@@ -333,17 +343,20 @@ export function App() {
                 ),
               )
             ) : (
-              <EmptyPanel
-                title="这一天还没有游戏与厂商数据"
-                body="导入后按厂商和游戏展开。不会用估算填上投注或输赢。"
-                items={['厂商', '游戏']}
-                onImport={() => setImportOpen(true)}
-              />
+            <EmptyPanel
+            title="这一天还没有游戏与厂商数据"
+            body="这批平台日报没有厂商和游戏。导入游戏文件后才会按厂商和游戏展开，不会用估算填上投注或输赢。"
+            items={['厂商', '游戏']}
+            onImport={() => setImportOpen(true)}
+          />
             )}
           </section>
 
           <footer className="colophon">
-            <p>数字和汇率保存在这个浏览器。换浏览器或清除站点数据后，需要重新导入。汇率文件还没到时，另一种货币的金额留空。收件夹里的文件不会自动删除。</p>
+            <p>
+              平台日报已经附在看板里{reportBundle.start && reportBundle.end ? `（${reportBundle.start} 至 ${reportBundle.end}，不含总计）` : ''}
+              。另存的导入仍只在这个浏览器。人数不按汇率换算。
+            </p>
             {hasScope && (
               <button type="button" className="text-btn danger" onClick={onClear}>
                 {confirmClear ? `确认清除 ${scopeName} ${date}` : '清除此日'}
@@ -423,7 +436,7 @@ function SummaryCard({ slice }: { slice: PlatformSlice }) {
                   needsRate={segment.needsRateKeys.filter((key) => userKeys.shown.includes(key) || userNeeds.has(key))}
                 />
               ) : (
-                <p className="quiet">当日文件没有这一类</p>
+                <p className="quiet">{segment.segment === '老用户' ? (oldUserNote(slice.platform.id) ?? '当日文件没有这一类') : '当日文件没有这一类'}</p>
               )}
             </div>
           ))}
@@ -442,9 +455,10 @@ function SummaryCard({ slice }: { slice: PlatformSlice }) {
       )}
       {ready && !slice.hasGames && <p className="quiet">游戏未导入</p>}
       <MoneyNote slice={slice} part="user" />
-      {ready && slice.importedAt && (
+      {ready && slice.sources.length > 0 && (
         <p className="source">
-          {slice.sources.join('、')} · {formatStamp(slice.importedAt)}
+          {slice.sources.join('、')}
+          {slice.importedAt ? ` · ${formatStamp(slice.importedAt)}` : ' · 随看板附带'}
         </p>
       )}
     </article>
@@ -466,7 +480,9 @@ function UserBlock({ slice, titled }: { slice: PlatformSlice; titled: boolean })
             {segment.metrics && (Object.keys(segment.metrics).length > 0 || segment.needsRateKeys.length > 0) ? (
               <Figures metrics={segment.metrics} keys={slice.userMetricKeys} currency={slice.displayCurrency} needsRate={segment.needsRateKeys} />
             ) : (
-              <p className="quiet">{segment.metrics ? '这一类没有数字列' : '当日文件没有这一类'}</p>
+              <p className="quiet">
+                {segment.segment === '老用户' ? (oldUserNote(slice.platform.id) ?? '当日文件没有这一类') : segment.metrics ? '这一类没有数字列' : '当日文件没有这一类'}
+              </p>
             )}
           </article>
         ))}

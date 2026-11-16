@@ -1,8 +1,10 @@
 import assert from 'node:assert/strict'
+import fs from 'node:fs'
 import { platforms } from '../src/data/platforms.ts'
 import { convertMoney } from '../src/lib/currency.ts'
 import { latestReadyDataDate } from '../src/lib/dates.ts'
 import { userMovement } from '../src/lib/movement.ts'
+import { parseReports, withBundled } from '../src/lib/reports.ts'
 import { parseExportFile, parseRateFile } from '../src/lib/parse.ts'
 import type { StoreData } from '../src/lib/types.ts'
 import { slicesFor } from '../src/lib/view.ts'
@@ -141,5 +143,47 @@ assert.equal(nativeUsd?.segments[0]?.metrics?.['充值金额'], 90)
 assert.equal(nativeUsd?.segments[2]?.metrics?.['充值金额'], 9600 / 18)
 assert.equal(nativeUsd?.userConverted, true)
 assert.equal(slicesFor(store, '2026-11-15', 'MXN').find((slice) => slice.platform.id === 'afun-mx')?.segments[2]?.metrics?.['充值金额'], 9600)
+
+function reportCsv(name: string) {
+  return fs.readFileSync(new URL(`../src/data/reports/${name}`, import.meta.url), 'utf8')
+}
+
+const bundle = parseReports([
+  { platformId: 'afun-mx', currency: 'MXN', filename: 'afun-mx-mxn.csv', csv: reportCsv('afun-mx-mxn.csv') },
+  { platformId: 'afun-mx', currency: 'USD', filename: 'afun-mx-usd.csv', csv: reportCsv('afun-mx-usd.csv') },
+  { platformId: 'betroia', currency: 'MXN', filename: 'betroia-mxn.csv', csv: reportCsv('betroia-mxn.csv') },
+  { platformId: 'betroia', currency: 'USD', filename: 'betroia-usd.csv', csv: reportCsv('betroia-usd.csv') },
+])
+
+assert.equal(bundle.start, '2026-10-01')
+assert.equal(bundle.end, '2026-11-15')
+assert.equal(new Set(bundle.points.filter((point) => point.platformId === 'afun-mx' && point.currency === 'MXN').map((point) => point.date)).size, 46)
+assert.equal(bundle.verdicts['afun-mx']?.stable, true)
+assert.equal(bundle.verdicts['afun-mx']?.pairs, 877)
+assert.ok(Math.abs((bundle.verdicts['afun-mx']?.mxnPerUsd ?? 0) - 18.67) < 1e-6)
+assert.equal(bundle.verdicts['betroia']?.stable, true)
+assert.equal(bundle.verdicts['betroia']?.pairs, 874)
+assert.ok(Math.abs((bundle.verdicts['betroia']?.mxnPerUsd ?? 0) - 17.4245) < 1e-6)
+assert.equal(bundle.oldUsers['afun-mx']?.derived, false)
+assert.equal(bundle.oldUsers['afun-mx']?.matchedDays, 0)
+assert.equal(bundle.oldUsers['afun-mx']?.missingColumn, '老用户充值金额')
+assert.equal(bundle.oldUsers['betroia']?.matchedDays, 0)
+assert.equal(bundle.users.some((row) => row.segment === '老用户'), false)
+
+const afunFresh = bundle.users.find((row) => row.platformId === 'afun-mx' && row.date === '2026-11-15' && row.currency === 'MXN' && row.segment === '新充用户')
+const afunFirst = bundle.users.find((row) => row.platformId === 'afun-mx' && row.date === '2026-11-15' && row.currency === 'MXN' && row.segment === '首充用户')
+const afunFreshUsd = bundle.users.find((row) => row.platformId === 'afun-mx' && row.date === '2026-11-15' && row.currency === 'USD' && row.segment === '新充用户')
+assert.equal(afunFresh?.metrics['人数'], 6233)
+assert.equal(afunFresh?.metrics['充值金额'], 1199092.24)
+assert.equal(afunFirst?.metrics['人数'], 8688)
+assert.equal(afunFirst?.metrics['充值金额'], 1558122.74)
+assert.equal(afunFreshUsd?.metrics['人数'], 6233)
+assert.equal(afunFreshUsd?.metrics['充值金额'], 64225.615)
+
+const attached = withBundled({ version: 2, users: [], games: [], rates: {} }, bundle)
+const attachedMove = userMovement(attached, '2026-11-15', 'afun-mx', 'MXN')
+assert.match(attachedMove[0]?.text ?? '', /老用户没有人数，没有计入，也不当成 0/)
+assert.equal(attachedMove[0]?.parts?.some((part) => part.segment === '老用户'), false)
+assert.equal(attached.games.length, 0)
 
 console.log('self-check ok')

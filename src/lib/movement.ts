@@ -86,11 +86,14 @@ function lineFor(store: StoreData, platformId: string, date: string, previous: s
     }
   }
 
-  const compared = USER_SEGMENTS.flatMap((segment) => {
-    const today = segmentCount(todayRows, segment, prefer)
-    const yesterday = segmentCount(yesterdayRows, segment, prefer)
-    if (today == null || yesterday == null) return []
-    return [{ segment, delta: today - yesterday }]
+  const sides = USER_SEGMENTS.map((segment) => ({
+    segment,
+    today: segmentCount(todayRows, segment, prefer),
+    yesterday: segmentCount(yesterdayRows, segment, prefer),
+  }))
+  const compared = sides.flatMap((side) => {
+    if (side.today == null || side.yesterday == null) return []
+    return [{ segment: side.segment, delta: side.today - side.yesterday }]
   })
 
   if (compared.length === 0) {
@@ -104,10 +107,15 @@ function lineFor(store: StoreData, platformId: string, date: string, previous: s
 
   const total = compared.reduce((sum, part) => sum + part.delta, 0)
   const detail = compared.map((part) => `${SHORT[part.segment]}${phrase(part.delta)}`).join('，')
-  const missing = USER_SEGMENTS.filter((segment) => !compared.some((part) => part.segment === segment))
-  const missingNote =
-    missing.length > 0 ? `${missing.map((segment) => SHORT[segment]).join('、')}缺少相邻一天的人数，没有计入，也不当成 0。` : ''
-  const scopeWord = missing.length > 0 ? '可比人数' : '人数'
+  const missingNote = sides
+    .filter((side) => side.today == null || side.yesterday == null)
+    .map((side) =>
+      side.today == null && side.yesterday == null
+        ? `${SHORT[side.segment]}没有人数，没有计入，也不当成 0。`
+        : `${SHORT[side.segment]}缺少相邻一天的人数，没有计入，也不当成 0。`,
+    )
+    .join('')
+  const scopeWord = missingNote ? '可比人数' : '人数'
   return {
     ...base,
     status: 'explained',

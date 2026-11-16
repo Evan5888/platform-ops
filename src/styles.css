@@ -426,6 +426,23 @@ th.num, td.num { text-align: right; padding-right: 0; }
 .game-cards { display: none; }
 .sheet-title { padding-top: 22px; font-size: 24px; }
 
+.series { margin: 0 0 22px; }
+.series h3, .series h4, .series-chart figcaption {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 500;
+}
+.series h3 { font-size: 22px; }
+.series h4 { margin-top: 16px; font-size: 20px; }
+.series header p { margin: 6px 0 0; color: var(--muted); }
+.series-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.series-chart { margin: 12px 0 0; }
+.series-chart svg { width: 100%; height: auto; display: block; }
+.series-chart text { fill: var(--faint); font-size: 11px; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 8px; color: var(--muted); font-size: 12px; }
+.legend i { display: inline-block; width: 16px; height: 2px; margin-right: 6px; vertical-align: middle; }
+.series-chart .table-scroll { max-height: 240px; border-top: 1px solid var(--line); }
+
 .colophon {
   margin-top: 48px;
   padding-top: 16px;
@@ -501,7 +518,7 @@ th.num, td.num { text-align: right; padding-right: 0; }
   .side-foot { margin-top: 0; }
   .brand h1 { font-size: 32px; }
   .fnbar > .solid { margin-left: 0; }
-  .spread, .segments { grid-template-columns: 1fr; }
+  .spread, .segments, .series-grid { grid-template-columns: 1fr; }
   .segments article, .segments article + article { padding: 20px 0; border-left: 0; border-top: 1px solid var(--line); }
   .segments article:first-child { border-top: 0; }
 }
@@ -511,7 +528,7 @@ th.num, td.num { text-align: right; padding-right: 0; }
   .fnbar, .sidebar { padding-left: 16px; padding-right: 16px; }
   .block-head h2, .summary h3, .empty h3 { font-size: 26px; }
   .sheet, .empty, .summary, .dialog, .movement { padding-left: 16px; padding-right: 16px; }
-  .table-scroll { display: none; }
+  .sheet > .table-scroll { display: none; }
   .game-cards { display: grid; gap: 8px; }
   .game-cards article { padding: 8px 0 16px; border-bottom: 1px solid var(--line); }
   .game-cards h3 { font-size: 22px; }
