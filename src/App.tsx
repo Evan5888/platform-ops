@@ -3,9 +3,10 @@ import { Figures, MetricValue, RateGap } from './components/Figures'
 import { Hint } from './components/Hint'
 import { ImportDialog } from './components/ImportDialog'
 import { Movement } from './components/Movement'
+import { HomeBoard } from './components/HomeBoard'
 import { oldUserNote, ReportSeries } from './components/SeriesChart'
 import { reportBundle } from './data/bundled'
-import { marketSummary, platforms } from './data/platforms'
+import { platforms } from './data/platforms'
 import { currencyLabel, formatRate } from './lib/currency'
 import { latestReadyDataDate } from './lib/dates'
 import { fetchInbox } from './lib/inbox'
@@ -37,7 +38,7 @@ function clampDate(value: string): string {
 
 export function App() {
   const [store, setStore] = useState<StoreData>(() => loadStore())
-  const [platformId, setPlatformId] = useState('all')
+  const [platformId, setPlatformId] = useState(platforms[0].id)
   const [displayCurrency, setDisplayCurrency] = useState<Currency>('MXN')
   const [from, setFrom] = useState(rangeStart)
   const [to, setTo] = useState(() => openingDate(latestReady, reportBundle.end))
@@ -71,7 +72,7 @@ export function App() {
   const shown = useMemo(() => visibleSlices(slices, platformId), [slices, platformId])
   const movement = useMemo(() => userMovement(viewStore, to, platformId, displayCurrency), [viewStore, to, platformId, displayCurrency])
   const hasScope = scopeHasData(store, to, platformId)
-  const market = marketSummary(platforms)
+  const current = shown[0]
 
   function commit(next: StoreData): string | null {
     const error = saveStore(next)
@@ -119,7 +120,7 @@ export function App() {
       setFrom(dates[0])
       setTo(dates[0])
     }
-    setPlatformId(ids.length === 1 ? ids[0] : 'all')
+    if (ids.length === 1) setPlatformId(ids[0])
     setPage(bundle.games.length > 0 && bundle.users.length === 0 ? 'games' : 'users')
     setStatus(`已写入 ${ids.map(platformLabel).join('、')} · ${dates.join('、')} · ${currencies.join('、')}。`)
     return null
@@ -143,32 +144,15 @@ export function App() {
     setStatus(error)
   }
 
-  const scopeName = platformId === 'all' ? '全部平台' : platformLabel(platformId)
+  const scopeName = platformLabel(platformId)
+  const rate = viewStore.rates[platformId]
+  const verdict = reportBundle.verdicts[platformId]
 
   return (
-    <div className="shell" data-latest={latestReady} data-currency={displayCurrency} data-page={page}>
-      <aside className="sidebar" data-testid="sidebar" aria-label="侧栏">
-        <div className="brand">
-          <p className="eyebrow">
-            <span className="rule" />
-            {market}市场
-          </p>
-          <h1>运营看板</h1>
-        </div>
-
-        <nav className="side-nav" aria-label="栏目">
-          {PAGES.map((item) => (
-            <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} data-testid={`nav-${item.id}`} onClick={() => setPage(item.id)}>
-              {item.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="side-platforms" role="radiogroup" aria-label="平台">
-          <p className="side-label">平台</p>
-          <button type="button" role="radio" aria-checked={platformId === 'all'} data-testid="platform-all" onClick={() => setPlatformId('all')}>
-            汇总对照
-          </button>
+    <div className="board" data-latest={latestReady} data-currency={displayCurrency} data-page={page} data-platform={platformId}>
+      <header className="topbar">
+        <div className="brand-mark">运营看板</div>
+        <nav className="platform-tabs" role="radiogroup" aria-label="平台" data-testid="sidebar">
           {platforms.map((item) => (
             <button
               key={item.id}
@@ -178,75 +162,60 @@ export function App() {
               data-testid={`platform-${item.id}`}
               onClick={() => setPlatformId(item.id)}
             >
-              <i style={{ background: item.accent }} />
               {item.name}
             </button>
           ))}
-        </div>
-      </aside>
-
-      <div className="workspace">
-        <header className="fnbar" data-testid="function-bar" aria-label="功能栏">
+        </nav>
+        <div className="top-tools" data-testid="function-bar">
           <label className="date-field">
-            <span>开始</span>
             <span className="date-face">
               <strong>{from}</strong>
               <input type="date" value={from} max={latestReady} data-testid="range-from" onChange={(event) => onFrom(event.target.value)} />
             </span>
           </label>
+          <span className="date-sep">—</span>
           <label className="date-field">
-            <span>结束</span>
             <span className="date-face">
               <strong>{to}</strong>
               <input type="date" value={to} max={latestReady} data-testid="range-to" onChange={(event) => onTo(event.target.value)} />
             </span>
           </label>
-
-          <div className="fn-currency">
-            <span>币种</span>
-            <div className="currency" role="radiogroup" aria-label="显示币种">
-              <button type="button" role="radio" aria-checked={displayCurrency === 'MXN'} data-testid="currency-mxn" onClick={() => setDisplayCurrency('MXN')}>
-                墨西哥比索
-                <small>MXN</small>
-              </button>
-              <button type="button" role="radio" aria-checked={displayCurrency === 'USD'} data-testid="currency-usd" onClick={() => setDisplayCurrency('USD')}>
-                美金
-                <small>USD</small>
-              </button>
-            </div>
+          <div className="currency" role="radiogroup" aria-label="显示币种">
+            <button type="button" role="radio" aria-checked={displayCurrency === 'MXN'} data-testid="currency-mxn" onClick={() => setDisplayCurrency('MXN')}>
+              MXN
+            </button>
+            <button type="button" role="radio" aria-checked={displayCurrency === 'USD'} data-testid="currency-usd" onClick={() => setDisplayCurrency('USD')}>
+              USD
+            </button>
           </div>
-
-          <div className="rates" data-testid="rate-board" aria-label="汇率">
+          <p className="rate-pill" data-testid="rate-board">
             <span>
-              1 美金兑比索
-              <Hint text="各平台日报金额列的中位数。人数不换算。" />
+              1 美金
+              <Hint text="这个平台日报金额列的中位数，保留两位小数。人数不换算。" />
             </span>
-            {platforms.map((item) => {
-              const rate = viewStore.rates[item.id]
-              const verdict = reportBundle.verdicts[item.id]
-              const unstable = verdict && !verdict.stable
-              return (
-                <p key={item.id} className="rate-line">
-                  <em>{item.name}</em>
-                  {rate ? (
-                    <strong data-testid={`rate-${item.id}`}>{formatRate(rate.mxnPerUsd)}</strong>
-                  ) : (
-                    <strong className="rate-empty" data-testid={`rate-${item.id}`}>
-                      {unstable ? '不稳定' : '未到'}
-                      {unstable && <Hint text="各列比值差得开，不压成一个数。" />}
-                    </strong>
-                  )}
-                </p>
-              )
-            })}
-          </div>
-
+            {rate ? (
+              <strong data-testid={`rate-${platformId}`}>{formatRate(rate.mxnPerUsd)}</strong>
+            ) : (
+              <strong className="rate-empty" data-testid={`rate-${platformId}`}>
+                {verdict && !verdict.stable ? '不稳定' : '未到'}
+              </strong>
+            )}
+          </p>
           <button type="button" className="solid" data-testid="open-import" onClick={() => setImportOpen(true)}>
             导入
           </button>
-        </header>
+        </div>
+      </header>
 
-        <main className="canvas">
+      <nav className="page-tabs" aria-label="栏目">
+        {PAGES.map((item) => (
+          <button key={item.id} type="button" aria-current={page === item.id ? 'page' : undefined} data-testid={`nav-${item.id}`} onClick={() => setPage(item.id)}>
+            {item.label}
+          </button>
+        ))}
+      </nav>
+
+      <main className="canvas">
           {status && (
             <p className="status" role="status">
               {status}
@@ -256,24 +225,12 @@ export function App() {
             </p>
           )}
 
-          {page === 'home' && (
-            <section className="block page" data-testid="page-home" aria-label="首页">
-              <div className="block-head">
-                <h2>首页</h2>
-              </div>
-              <div className="spread">
-                {shown.map((slice) => (
-                  <HomeCard key={slice.platform.id} slice={slice} />
-                ))}
-              </div>
-              <ReportSeries platformId={platformId} currency={displayCurrency} from={from} to={to} showTable={false} />
-            </section>
-          )}
+          {page === 'home' && current && <HomeBoard platformId={platformId} currency={displayCurrency} from={from} to={to} slice={current} />}
 
           {page === 'users' && (
             <section className="block page" id="users" data-testid="section-users" data-state={shown.some((slice) => slice.hasUsers) ? 'ready' : 'empty'}>
               <div className="block-head">
-                <h2>用户</h2>
+                <h2>{scopeName} · 用户</h2>
               </div>
               <Movement lines={movement} />
               {shown.some((slice) => slice.hasUsers) ? (
@@ -301,7 +258,7 @@ export function App() {
           {page === 'games' && (
             <section className="block page" id="games" data-testid="section-games" data-state={shown.some((slice) => slice.hasGames) ? 'ready' : 'empty'}>
               <div className="block-head">
-                <h2>游戏与厂商</h2>
+                <h2>{scopeName} · 游戏与厂商</h2>
               </div>
               {shown.some((slice) => slice.hasGames) ? (
                 shown.map((slice) =>
@@ -319,12 +276,11 @@ export function App() {
             </section>
           )}
         </main>
-      </div>
 
       {importOpen && (
         <ImportDialog
           platforms={platforms}
-          initialPlatformId={platformId === 'all' ? platforms[0].id : platformId}
+          initialPlatformId={platformId}
           initialDate={to}
           latestReadyDate={latestReady}
           inbox={inbox}
@@ -335,43 +291,6 @@ export function App() {
           onApply={onApply}
           onApplyRates={onApplyRates}
         />
-      )}
-    </div>
-  )
-}
-
-function HomeCard({ slice }: { slice: PlatformSlice }) {
-  return (
-    <article className="summary" data-testid={`summary-${slice.platform.id}`} data-state={slice.hasUsers ? 'ready' : 'empty'} style={{ borderTopColor: slice.platform.accent }}>
-      <header>
-        <h3>{slice.platform.name}</h3>
-      </header>
-      {slice.hasUsers ? (
-        <div className="metric-grid">
-          {slice.segments.map((segment) => (
-            <SegmentTile key={segment.segment} slice={slice} segment={segment} />
-          ))}
-        </div>
-      ) : (
-        <p className="quiet">暂无</p>
-      )}
-    </article>
-  )
-}
-
-function SegmentTile({ slice, segment }: { slice: PlatformSlice; segment: PlatformSlice['segments'][number] }) {
-  const note = segment.segment === '老用户' ? oldUserNote(slice.platform.id) : null
-  const hasNumbers = segment.metrics && (Object.keys(segment.metrics).length > 0 || segment.needsRateKeys.length > 0)
-  return (
-    <div>
-      <p className="seg">
-        {segment.segment}
-        {note && <Hint text={note} />}
-      </p>
-      {hasNumbers ? (
-        <Figures metrics={segment.metrics ?? {}} keys={slice.userMetricKeys} currency={slice.displayCurrency} needsRate={segment.needsRateKeys} />
-      ) : (
-        <p className="dash">—</p>
       )}
     </div>
   )
