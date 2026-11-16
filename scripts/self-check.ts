@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
 import { platforms } from '../src/data/platforms.ts'
-import { convertMoney } from '../src/lib/currency.ts'
+import { convertMoney, formatRate } from '../src/lib/currency.ts'
 import { latestReadyDataDate } from '../src/lib/dates.ts'
 import { userMovement } from '../src/lib/movement.ts'
 import { parseReports, withBundled } from '../src/lib/reports.ts'
@@ -12,6 +12,8 @@ import { slicesFor } from '../src/lib/view.ts'
 assert.equal(latestReadyDataDate(new Date('2026-11-16T11:17:00Z')), '2026-11-15')
 assert.equal(latestReadyDataDate(new Date('2026-11-16T08:30:00Z')), '2026-11-14')
 assert.equal(latestReadyDataDate(new Date('2026-11-16T09:00:00Z')), '2026-11-15')
+assert.equal(formatRate(18.67), '18.67')
+assert.equal(formatRate(17.4245), '17.42')
 
 const csv = [
   '分区,日期,平台,用户类型,厂商,游戏,人数,充值金额,投注金额,输赢,注单数',

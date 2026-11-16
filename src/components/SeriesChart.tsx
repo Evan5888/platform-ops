@@ -1,6 +1,5 @@
 import { describePlatform, platforms } from '../data/platforms'
 import { reportBundle } from '../data/bundled'
-import { currencyLabel } from '../lib/currency'
 import type { SeriesPoint } from '../lib/reports'
 import type { Currency } from '../lib/types'
 
@@ -29,11 +28,13 @@ function Chart({
   points,
   series,
   money,
+  showTable,
 }: {
   title: string
   points: SeriesPoint[]
   series: Array<{ key: Key; label: string; color: string }>
   money: boolean
+  showTable: boolean
 }) {
   const width = 640
   const height = 168
@@ -78,7 +79,7 @@ function Chart({
           </span>
         ))}
       </p>
-      <div className="table-scroll">
+      {showTable && <div className="table-scroll">
         <table>
           <thead>
             <tr>
@@ -106,40 +107,44 @@ function Chart({
             ))}
           </tbody>
         </table>
-      </div>
+      </div>}
     </figure>
   )
 }
 
-export function ReportSeries({ platformId, currency }: { platformId: string; currency: Currency }) {
+export function ReportSeries({
+  platformId,
+  currency,
+  from,
+  to,
+  showTable = true,
+}: {
+  platformId: string
+  currency: Currency
+  from: string
+  to: string
+  showTable?: boolean
+}) {
   const ids = platformId === 'all' ? platforms.map((item) => item.id) : [platformId]
-  const span = reportBundle.start && reportBundle.end ? `${reportBundle.start} 至 ${reportBundle.end}` : ''
+  const blocks = ids.flatMap((id) => {
+    const points = reportBundle.points
+      .filter((point) => point.platformId === id && point.currency === currency && point.date >= from && point.date <= to)
+      .sort((a, b) => a.date.localeCompare(b.date))
+    if (points.length === 0) return []
+    return [{ id, name: describePlatform(id).name, points }]
+  })
+  if (blocks.length === 0) return <p className="quiet">暂无</p>
   return (
     <div className="series" data-testid="report-series">
-      <header>
-        <h3>每日序列</h3>
-        <p>
-          {span}，不含总计行。金额用{currencyLabel(currency)}原文件，人数不换算。
-        </p>
-      </header>
-      {ids.map((id) => {
-        const points = reportBundle.points
-          .filter((point) => point.platformId === id && point.currency === currency)
-          .sort((a, b) => a.date.localeCompare(b.date))
-        const name = describePlatform(id).name
-        const oldUser = reportBundle.oldUsers[id]
-        if (points.length === 0) return null
-        return (
-          <div key={id} className="series-platform">
-            <h4>{name}</h4>
-            <div className="series-grid">
-              <Chart title={`${name} 人数`} points={points} series={COUNT_SERIES} money={false} />
-              <Chart title={`${name} 金额`} points={points} series={MONEY_SERIES} money />
-            </div>
-            {oldUser && !oldUser.derived && <p className="quiet">{oldUser.note}</p>}
+      {blocks.map((block) => (
+        <div key={block.id} className="series-platform">
+          {blocks.length > 1 && <h4>{block.name}</h4>}
+          <div className="series-grid">
+            <Chart title={`${block.name} 人数`} points={block.points} series={COUNT_SERIES} money={false} showTable={showTable} />
+            <Chart title={`${block.name} 金额`} points={block.points} series={MONEY_SERIES} money showTable={showTable} />
           </div>
-        )
-      })}
+        </div>
+      ))}
     </div>
   )
 }
