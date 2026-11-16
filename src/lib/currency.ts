@@ -27,7 +27,7 @@ export function matchCurrency(value: string): Currency | null {
 }
 
 export function formatRate(rate: number): string {
-  return new Intl.NumberFormat('zh-CN', { maximumFractionDigits: 6 }).format(rate)
+  return new Intl.NumberFormat('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(rate)
 }
 
 /** 用该平台已保存的「1 美金 = ? 比索」换算。没有汇率就返回 null，不估一个数。 */
