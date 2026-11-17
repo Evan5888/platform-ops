@@ -5,7 +5,7 @@
 ```text
 platform-intelligence/
   apps/
-    web/                 网页。React、TypeScript、Tailwind、shadcn、ECharts
+    web/                 网页。React、TypeScript、Tailwind、ECharts。第一阶段未使用 shadcn
     api/                 FastAPI。导入、校验、查询、归因
   packages/
     contracts/           网页和服务共用的指标名、请求和响应类型

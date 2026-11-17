@@ -2,7 +2,7 @@ import { Link } from 'react-router-dom'
 import { Hint } from '../components/Hint'
 import { Trend } from '../components/Trend'
 import { formatMetric, formatPct } from '../lib/format'
-import { addDays, displayValue, isCount, platformById, rowOn, rowsBetween, type MetricKey } from '../mock/demo'
+import { addDays, displayValue, isCount, metricLabel, platformById, rowOn, rowsBetween, type MetricKey } from '../mock/demo'
 import { useFilters } from '../state/Filters'
 
 const top: MetricKey[] = ['活跃人数', '注册人数', '首充人数']
@@ -36,7 +36,7 @@ export function Overview() {
               const pct = previous == null || previous === 0 ? null : (current - previous) / previous
               return (
                 <Link key={key} to={`/analysis/${encodeURIComponent(key)}`} data-testid={`kpi-${key}`} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 no-underline">
-                  <p className="text-sm text-[var(--muted)]">{key}</p>
+                  <p className="text-sm text-[var(--muted)]">{metricLabel(key)}</p>
                   <p className="mt-2 text-3xl font-semibold tabular-nums">{shown(key, current)}</p>
                   <p className={`mt-2 text-sm ${pct == null ? 'text-[var(--muted)]' : pct < 0 ? 'text-[var(--down)]' : 'text-[var(--up)]'}`}>{pct == null ? '较前一日 —' : `较前一日 ${formatPct(pct)}`}</p>
                 </Link>
@@ -44,8 +44,8 @@ export function Overview() {
             })}
           </div>
           <div className="mt-4 rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
-            <h2 className="mb-2 text-base font-medium">活跃人数</h2>
-            <Trend labels={range.map((row) => row.date.slice(5))} series={[{ name: '活跃人数', data: range.map((row) => row.活跃人数) }]} />
+            <h2 className="mb-2 text-base font-medium">活跃人数（DAU）</h2>
+            <Trend labels={range.map((row) => row.date.slice(5))} series={[{ name: '活跃人数（DAU）', data: range.map((row) => row.活跃人数) }]} />
           </div>
           <div className="mt-4 grid gap-3 lg:grid-cols-2">
             <section className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4">
@@ -58,7 +58,7 @@ export function Overview() {
                   const total = week.reduce((sum, row) => sum + row[key], 0)
                   return (
                     <Link key={key} to={`/analysis/${encodeURIComponent(key)}`} className="rounded-xl px-2 py-2 no-underline hover:bg-[var(--accent-soft)]">
-                      <p className="text-xs text-[var(--muted)]">{key}</p>
+                      <p className="text-xs text-[var(--muted)]">{metricLabel(key)}</p>
                       <p className="mt-1 text-xl font-semibold tabular-nums">{shown(key, today[key])}</p>
                       <p className="text-xs text-[var(--muted)]">结束日</p>
                       <p className="mt-2 tabular-nums">{shown(key, total)}</p>
@@ -73,7 +73,7 @@ export function Overview() {
               <div className="mt-3 grid grid-cols-3 gap-2 text-center">
                 {gameKeys.map((key) => (
                   <Link key={key} to={`/analysis/${encodeURIComponent(key)}`} className="rounded-xl px-2 py-2 no-underline hover:bg-[var(--accent-soft)]">
-                    <p className="text-xs text-[var(--muted)]">{key}</p>
+                    <p className="text-xs text-[var(--muted)]">{metricLabel(key)}</p>
                     <p className="mt-1 text-xl font-semibold tabular-nums">{shown(key, today[key])}</p>
                   </Link>
                 ))}

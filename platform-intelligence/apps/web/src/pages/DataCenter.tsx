@@ -9,7 +9,7 @@ const preview = [
 
 const mapping = [
   ['日期', '业务日期'],
-  ['活跃人数', '活跃人数'],
+  ['活跃人数', '活跃人数（DAU）'],
   ['注册人数', '注册人数'],
   ['充值人数', '充值人数'],
   ['首充人数', '首充人数'],
@@ -26,7 +26,7 @@ export function DataCenter() {
   return (
     <section data-testid="page-data">
       <h1 className="text-2xl font-semibold">数据中心</h1>
-      <p className="mt-1 text-sm text-[var(--muted)]">这里是导入流程的界面。文件不会被读取，也不会写入指标。</p>
+      <p className="mt-1 text-sm text-[var(--muted)]">这里是导入流程的界面。文件不会被读取，也不会写入指标。正式导入沿用墨西哥自然日结束后再过 3 小时的窗口。这一页还不会按这个规则拦文件。</p>
       <div className="mt-4 grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
         <div className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-2">
           {filters.batches.map((item) => (
@@ -54,7 +54,7 @@ export function DataCenter() {
           <table className="mt-2 w-full text-sm">
             <thead>
               <tr className="text-left text-[var(--muted)]">
-                {['日期', '活跃人数', '注册人数', '充值人数', '充值金额'].map((cell) => <th key={cell} className="py-1 font-normal">{cell}</th>)}
+                {['日期', '活跃人数（DAU）', '注册人数', '充值人数', '充值金额'].map((cell) => <th key={cell} className="py-1 font-normal">{cell}</th>)}
               </tr>
             </thead>
             <tbody>

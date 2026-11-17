@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { formatDelta, formatPct } from '../lib/format'
-import { addDays, displayValue, isCount, metricKeys, platformById, rowOn } from '../mock/demo'
+import { addDays, displayValue, isCount, metricKeys, metricLabel, platformById, rowOn } from '../mock/demo'
 import { useFilters } from '../state/Filters'
 
 export function Movement() {
@@ -35,7 +35,7 @@ export function Movement() {
                 return (
                   <tr key={key} className="border-t border-[var(--line)]">
                     <td className="px-4 py-3">
-                      <Link to={`/analysis/${encodeURIComponent(key)}`} className="text-[var(--accent)]">{key}</Link>
+                      <Link to={`/analysis/${encodeURIComponent(key)}`} className="text-[var(--accent)]">{metricLabel(key)}</Link>
                     </td>
                     <td className="px-4 py-3 tabular-nums">{show(yesterday[key])}</td>
                     <td className="px-4 py-3 tabular-nums">{show(today[key])}</td>

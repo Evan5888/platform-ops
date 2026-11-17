@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Hint } from '../components/Hint'
 import { formatMetric } from '../lib/format'
-import { displayValue, isCount, platformById, rowOn, type MetricKey } from '../mock/demo'
+import { displayValue, isCount, metricLabel, platformById, rowOn, type MetricKey } from '../mock/demo'
 import { useFilters } from '../state/Filters'
 
 function useToday() {
@@ -18,7 +18,7 @@ function useToday() {
 function Figure({ label, value }: { label: MetricKey; value: string }) {
   return (
     <Link to={`/analysis/${encodeURIComponent(label)}`} className="rounded-2xl border border-[var(--line)] bg-[var(--panel)] p-4 no-underline">
-      <p className="text-sm text-[var(--muted)]">{label}</p>
+      <p className="text-sm text-[var(--muted)]">{metricLabel(label)}</p>
       <p className="mt-2 text-2xl font-semibold tabular-nums">{value}</p>
     </Link>
   )
@@ -61,7 +61,7 @@ export function PaymentsPage() {
       </div>
       <p className="mt-4 text-sm text-[var(--muted)]">
         充提差 = 充值金额 − 提现金额 + KOL工资
-        <Hint text="这条算式在现有日报里对过。KOL工资的业务含义还待确认。这里的数是演示。" />
+        <Hint text="KOL工资是付给网红达人的钱，通过平台账户发给他们提现。算式已在现有日报逐日对过。这里的数是演示。" />
       </p>
       <p className="mt-2 text-sm text-[var(--muted)]">没有支付通道日报，不拆通道。</p>
     </section>

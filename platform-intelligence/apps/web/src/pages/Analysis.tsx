@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router-dom'
 import { Trend } from '../components/Trend'
 import { formatDelta, formatMetric, formatPct } from '../lib/format'
-import { addDays, computedOf, displayValue, driversFor, gapFor, isCount, metricKeys, platformById, rowOn, rowsBetween, type MetricKey } from '../mock/demo'
+import { addDays, computedOf, displayValue, driversFor, gapFor, isCount, metricKeys, metricLabel, platformById, rowOn, rowsBetween, type MetricKey } from '../mock/demo'
 import { useFilters } from '../state/Filters'
 
 function isMetric(value: string): value is MetricKey {
@@ -35,7 +35,7 @@ export function Analysis() {
         <Link to="/" className="text-[var(--accent)]">总览</Link>
         <span> / {platform.name}</span>
       </p>
-      <h1 className="mt-1 text-2xl font-semibold">{key}</h1>
+      <h1 className="mt-1 text-2xl font-semibold">{metricLabel(key)}</h1>
       <div className="mt-4 grid gap-3 sm:grid-cols-4">
         <Stat label="当期" value={show(current)} />
         <Stat label="对比期" value={previous == null ? '—' : show(previous)} />
@@ -82,7 +82,7 @@ export function Analysis() {
         </p>
       </section>
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <Layer title="已核对的变化" body={delta == null ? '没有前一日，不算变化。' : `${key} 差额 ${formatDelta(displayValue(delta, key, filters.currency, platform.demoRate), money)}。这是演示日，不是业务结论。`} />
+        <Layer title="已核对的变化" body={delta == null ? '没有前一日，不算变化。' : `${metricLabel(key)} 差额 ${formatDelta(displayValue(delta, key, filters.currency, platform.demoRate), money)}。这是演示日，不是业务结论。`} />
         <Layer title="可量化的驱动" body={drivers.length === 0 ? '没有已核对的分项。' : drivers.map((driver) => driver.label).join('、')} />
         <Layer title="可能的业务假设" body="系统不自动写业务原因。要记录的话，写到分析记录里，并标成未经证实。" />
         <Layer title="尚待验证" body={gaps.length === 0 ? '以现有演示字段，没有更细的维度。' : `需要${gaps.join('、')}。没有这张表之前，不拆占比。`} />

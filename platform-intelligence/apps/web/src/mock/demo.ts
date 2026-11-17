@@ -37,6 +37,12 @@ export function isCount(key: MetricKey): boolean {
   return countKeys.has(key)
 }
 
+export function metricLabel(key: MetricKey): string {
+  if (key === '活跃人数') return '活跃人数（DAU）'
+  if (key === '公司输赢') return '公司输赢（GGR）'
+  return key
+}
+
 export function addDays(iso: string, days: number): string {
   const [year, month, day] = iso.split('-').map(Number)
   const utc = new Date(Date.UTC(year, month - 1, day))
